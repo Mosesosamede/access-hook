@@ -15,8 +15,8 @@ export const PaymentConfirmationEmail = ({ bookCode }: PaymentConfirmationProps)
         <div style={{ backgroundColor: '#f0f0f0', padding: '15px', borderRadius: '5px', textAlign: 'center', fontSize: '18px', fontWeight: 'bold' }}>
           Book Code: {bookCode}
         </div>
-        <p>Use this code to access the portal and complete your registration for the internship opportunity.</p>
-        <p>Once your registration is complete, your book will be available for access directly on the platform.</p>
+        <p>Use this code to  access the portal and complete your registration for the internship opportunity.</p>
+        <p>Once your  registration is complete, your book will be available for access directly on the platform.</p>
         <p><strong>👉 Next Step:</strong></p>
         <div style={{ textAlign: 'center', marginTop: '20px', marginBottom: '20px' }}>
           <a href="https://ecosystem.deloxehr.com" style={{ backgroundColor: '#6d28d9', color: '#ffffff', padding: '12px 24px', borderRadius: '5px', textDecoration: 'none', fontWeight: 'bold' }}>Access Portal</a>
