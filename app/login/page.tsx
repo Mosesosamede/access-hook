@@ -1,8 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { getSupabase } from '@/lib/supabase';
-import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
 
 const supabase = getSupabase();
 
@@ -27,7 +28,6 @@ export default function LoginPage() {
     setErrorMessage('');
     
     try {
-      // 2. Attempt login
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
@@ -71,58 +71,91 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-[#1a2321]">
-      <div className="bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 p-12 max-w-md w-full shadow-2xl">
+    <main className="relative min-h-screen flex items-center justify-center p-6 overflow-hidden">
+      {/* Background Image with subtle overlay */}
+      <div className="fixed inset-0 -z-10">
+        <Image 
+          src="https://i.ibb.co/HDBsw5kC/Deloxe-hr-background-3.jpg" 
+          alt="Deloxe HR Background" 
+          fill 
+          priority 
+          className="object-cover object-center"
+          referrerPolicy="no-referrer"
+        />
+        <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" />
+      </div>
+
+      {/* Main Form Container with white transparent borders and frosted glass */}
+      <div 
+        id="login-card-container"
+        className="relative bg-white/10 backdrop-blur-xl rounded-3xl border border-white/30 p-8 sm:p-12 max-w-md w-full shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] transition-all"
+      >
         {mode === 'login' ? (
           <>
-            <h1 className="text-3xl font-bold text-[#dbf0de] mb-6 text-center">Welcome Back</h1>
-            <p className="text-white text-center mb-8">Enter your credentials to access your dashboard.</p>
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Welcome Back</h1>
+              <p className="text-white/80 text-sm">Enter your credentials to access your dashboard.</p>
+            </div>
             
             {errorMessage && (
-              <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl text-red-200 text-sm text-center">
+              <div id="login-error-alert" className="mb-6 p-4 bg-red-500/25 border border-white/30 rounded-xl text-red-100 text-sm text-center backdrop-blur-sm">
                 {errorMessage}
               </div>
             )}
 
-            <form onSubmit={handleLogin} className="space-y-4">
-              <input 
-                type="email" 
-                id="email"
-                name="email"
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                placeholder="Email Address" 
-                className="w-full bg-[#1a2321]/50 p-4 rounded-xl border border-white/10 text-white focus:border-[#dbf0de] transition-all outline-none" 
-                required
-              />
-              <div className="relative">
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div>
+                <label htmlFor="email" className="block text-xs font-semibold text-white/90 uppercase tracking-wider mb-2">
+                  Email Address
+                </label>
                 <input 
-                  type={showPassword ? 'text' : 'password'} 
-                  id="password"
-                  name="password"
-                  value={password} 
-                  onChange={(e) => setPassword(e.target.value)} 
-                  placeholder="Password" 
-                  className="w-full bg-[#1a2321]/50 p-4 pr-12 rounded-xl border border-white/10 text-white focus:border-[#dbf0de] transition-all outline-none" 
+                  type="email" 
+                  id="email"
+                  name="email"
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  placeholder="name@example.com" 
+                  className="w-full bg-black/30 backdrop-blur-md p-4 rounded-xl border border-white/30 text-white placeholder-white/50 focus:border-white focus:ring-2 focus:ring-white/20 transition-all outline-none" 
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-xs font-semibold text-white/90 uppercase tracking-wider mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <input 
+                    type={showPassword ? 'text' : 'password'} 
+                    id="password"
+                    name="password"
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    placeholder="••••••••" 
+                    className="w-full bg-black/30 backdrop-blur-md p-4 pr-12 rounded-xl border border-white/30 text-white placeholder-white/50 focus:border-white focus:ring-2 focus:ring-white/20 transition-all outline-none" 
+                    required
+                  />
+                  <button
+                    type="button"
+                    id="toggle-password-visibility"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-colors"
+                    aria-label="Toggle password visibility"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
               </div>
 
               <div className="flex justify-end text-sm">
                 <button 
                   type="button"
+                  id="forgot-password-toggle"
                   onClick={() => {
                     setMode('forgot');
                     setResetEmail(email);
                   }}
-                  className="text-gray-400 hover:text-[#dbf0de] transition-colors"
+                  className="text-white/80 hover:text-white underline underline-offset-4 decoration-white/40 hover:decoration-white transition-colors text-xs font-medium"
                 >
                   Forgot Password?
                 </button>
@@ -133,66 +166,79 @@ export default function LoginPage() {
                 id="login-submit"
                 name="login-submit"
                 disabled={loading} 
-                className="w-full px-6 py-4 bg-[#dbf0de] text-[#1a2321] rounded-full font-bold hover:shadow-lg transition-all hover:scale-105"
+                className="w-full px-6 py-4 bg-[#dbf0de] hover:bg-white text-[#1a2321] rounded-full font-bold border border-white/40 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
               >
+                {loading && <Loader2 size={18} className="animate-spin text-[#1a2321]" />}
                 {loading ? 'Logging in...' : 'Sign In'}
               </button>
             </form>
           </>
         ) : (
           <>
-            <div className="flex items-center gap-2 mb-6">
+            <div className="flex items-center gap-3 mb-6">
               <button 
+                type="button"
+                id="back-to-login-btn"
                 onClick={() => setMode('login')}
-                className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+                className="p-2 text-white/80 hover:text-white rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 transition-colors"
+                aria-label="Back to login"
               >
-                <ArrowLeft size={20} />
+                <ArrowLeft size={18} />
               </button>
-              <h1 className="text-2xl font-bold text-[#dbf0de]">Reset Password</h1>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Reset Password</h1>
             </div>
             
-            <p className="text-white mb-6 text-sm">
+            <p className="text-white/80 mb-6 text-sm">
               Enter your email address and we will send you a secure link to reset your password.
             </p>
 
             {resetError && (
-              <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl text-red-200 text-sm text-center">
+              <div id="reset-error-alert" className="mb-6 p-4 bg-red-500/25 border border-white/30 rounded-xl text-red-100 text-sm text-center backdrop-blur-sm">
                 {resetError}
               </div>
             )}
 
             {resetSuccess ? (
               <div className="text-center space-y-6">
-                <div className="p-4 bg-green-500/20 border border-green-500/50 rounded-xl text-green-200 text-sm text-center">
+                <div className="p-4 bg-green-500/25 border border-white/30 rounded-xl text-green-100 text-sm text-center backdrop-blur-sm">
                   Password reset link sent! Check your inbox for further instructions.
                 </div>
                 <button 
+                  type="button"
+                  id="reset-success-back-btn"
                   onClick={() => {
                     setMode('login');
                     setResetSuccess(false);
                   }}
-                  className="w-full px-6 py-4 bg-[#dbf0de] text-[#1a2321] rounded-full font-bold hover:shadow-lg transition-all hover:scale-105"
+                  className="w-full px-6 py-4 bg-[#dbf0de] hover:bg-white text-[#1a2321] rounded-full font-bold border border-white/40 shadow-lg transition-all hover:scale-[1.02]"
                 >
                   Back to Sign In
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleForgotPassword} className="space-y-4">
-                <input 
-                  type="email" 
-                  id="reset-email"
-                  name="reset-email"
-                  value={resetEmail} 
-                  onChange={(e) => setResetEmail(e.target.value)} 
-                  placeholder="Email Address" 
-                  className="w-full bg-[#1a2321]/50 p-4 rounded-xl border border-white/10 text-white focus:border-[#dbf0de] transition-all outline-none" 
-                  required
-                />
+              <form onSubmit={handleForgotPassword} className="space-y-5">
+                <div>
+                  <label htmlFor="reset-email" className="block text-xs font-semibold text-white/90 uppercase tracking-wider mb-2">
+                    Email Address
+                  </label>
+                  <input 
+                    type="email" 
+                    id="reset-email"
+                    name="reset-email"
+                    value={resetEmail} 
+                    onChange={(e) => setResetEmail(e.target.value)} 
+                    placeholder="name@example.com" 
+                    className="w-full bg-black/30 backdrop-blur-md p-4 rounded-xl border border-white/30 text-white placeholder-white/50 focus:border-white focus:ring-2 focus:ring-white/20 transition-all outline-none" 
+                    required
+                  />
+                </div>
                 <button 
                   type="submit" 
+                  id="send-reset-link-btn"
                   disabled={resetLoading} 
-                  className="w-full px-6 py-4 bg-[#dbf0de] text-[#1a2321] rounded-full font-bold hover:shadow-lg transition-all hover:scale-105"
+                  className="w-full px-6 py-4 bg-[#dbf0de] hover:bg-white text-[#1a2321] rounded-full font-bold border border-white/40 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
                 >
+                  {resetLoading && <Loader2 size={18} className="animate-spin text-[#1a2321]" />}
                   {resetLoading ? 'Sending link...' : 'Send Reset Link'}
                 </button>
               </form>
@@ -203,3 +249,4 @@ export default function LoginPage() {
     </main>
   );
 }
+
