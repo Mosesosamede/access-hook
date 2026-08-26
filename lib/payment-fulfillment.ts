@@ -2,7 +2,6 @@ import { getServiceSupabase } from '@/lib/supabase';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import nodemailer from 'nodemailer';
-import { render } from '@react-email/render';
 import { PaymentConfirmationEmail } from '@/components/emails/PaymentConfirmation';
 import * as React from 'react';
 
@@ -194,7 +193,8 @@ export async function processPaymentFulfillment(params: FulfillmentParams): Prom
         },
       });
 
-      const emailHtml = await render(
+      const ReactDOMServer = (await import('react-dom/server')).default;
+      const emailHtml = ReactDOMServer.renderToStaticMarkup(
         React.createElement(PaymentConfirmationEmail, { bookCode })
       );
 
