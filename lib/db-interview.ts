@@ -1,6 +1,8 @@
 import { db } from './firebase-admin';
 import { getServiceSupabase } from './supabase';
 
+export const TOTAL_INTERVIEW_QUESTIONS = 4;
+
 export interface DbInterview {
   id: string;
   user_id: string;
@@ -57,11 +59,10 @@ const tableCache: Record<string, boolean> = {};
 
 /**
  * Checks if a Supabase table is available.
- * Caches the result to avoid redundant network overhead on subsequent calls.
  */
 async function isTableAvailable(supabase: any, tableName: string): Promise<boolean> {
-  if (tableName in tableCache) {
-    return tableCache[tableName];
+  if (tableCache[tableName] === true) {
+    return true;
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -73,14 +74,19 @@ async function isTableAvailable(supabase: any, tableName: string): Promise<boole
   try {
     const { error } = await supabase.from(tableName).select('id').limit(1);
     if (error) {
-      console.warn(`Supabase table "${tableName}" check failed, falling back to Firestore:`, error.message);
-      tableCache[tableName] = false;
-      return false;
+      // If table doesn't exist (e.g. 42P01 or PGRST116/relation does not exist), cache false
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        console.warn(`Supabase table "${tableName}" does not exist, falling back to Firestore.`);
+        tableCache[tableName] = false;
+        return false;
+      }
+      // For other errors (auth, permission, etc.), log warning but allow attempting operation
+      console.warn(`Supabase table "${tableName}" check warning:`, error.message);
     }
     tableCache[tableName] = true;
     return true;
   } catch (err) {
-    console.warn(`Supabase table "${tableName}" query threw exception, falling back to Firestore:`, err);
+    console.warn(`Supabase table "${tableName}" query threw exception:`, err);
     tableCache[tableName] = false;
     return false;
   }
@@ -99,9 +105,11 @@ export async function getUserInterview(supabase: any, userId: string): Promise<D
         .maybeSingle();
       if (!error && data) {
         return data as DbInterview;
+      } else if (error && error.code !== '42P01') {
+        console.error('Supabase getUserInterview error:', error);
       }
     } catch (err) {
-      console.error('Supabase getUserInterview error, checking Firestore:', err);
+      console.error('Supabase getUserInterview exception:', err);
     }
   }
 
@@ -153,9 +161,17 @@ export async function createUserInterview(supabase: any, userId: string): Promis
       
       if (!error && data) {
         return data as DbInterview;
+      } else if (error) {
+        console.error('Supabase createUserInterview error detail:', error);
+        if (error.code !== '42P01') {
+          throw new Error(`Failed to create interview in Supabase: ${error.message}`);
+        }
       }
-    } catch (err) {
-      console.error('Supabase createUserInterview error, writing to Firestore:', err);
+    } catch (err: any) {
+      console.error('Supabase createUserInterview exception, writing to Firestore:', err);
+      if (err.message && err.message.includes('Failed to create interview in Supabase')) {
+        throw err;
+      }
     }
   }
 
@@ -191,9 +207,11 @@ export async function getInterviewAnswers(supabase: any, userId: string, intervi
         .order('question_number', { ascending: true });
       if (!error && data) {
         return data as DbAnswer[];
+      } else if (error && error.code !== '42P01') {
+        console.error('Supabase getInterviewAnswers error:', error);
       }
     } catch (err) {
-      console.error('Supabase getInterviewAnswers error, checking Firestore:', err);
+      console.error('Supabase getInterviewAnswers exception:', err);
     }
   }
 
@@ -212,12 +230,14 @@ export async function getInterviewAnswers(supabase: any, userId: string, intervi
 }
 
 /**
- * Saves a single answer.
+ * Saves a single answer with upsert and advances current_question.
  */
 export async function saveInterviewAnswer(supabase: any, userId: string, interviewId: string, answer: DbAnswer): Promise<DbAnswer> {
   const now = new Date().toISOString();
   const answerData = {
     ...answer,
+    interview_id: interviewId,
+    user_id: userId,
     upload_status: 'uploaded',
     created_at: now,
     updated_at: now
@@ -238,7 +258,8 @@ export async function saveInterviewAnswer(supabase: any, userId: string, intervi
           duration_seconds: answer.duration_seconds,
           transcript: answer.transcript,
           upload_status: 'uploaded',
-          transcription_status: answer.transcription_status
+          transcription_status: answer.transcription_status,
+          updated_at: now
         }, {
           onConflict: 'interview_id,question_number'
         })
@@ -246,22 +267,35 @@ export async function saveInterviewAnswer(supabase: any, userId: string, intervi
         .single();
       
       if (!error && data) {
+        // Also update interview current_question safely
+        const nextQuestion = Math.min(answer.question_number + 1, TOTAL_INTERVIEW_QUESTIONS);
+        await adminSupabase
+          .from('interviews')
+          .update({
+            current_question: nextQuestion,
+            updated_at: now
+          })
+          .eq('id', interviewId);
+
         return data as DbAnswer;
       } else if (error) {
         console.error('Supabase saveInterviewAnswer error detail:', error);
+        throw new Error(`Failed to save interview answer: ${error.message}`);
       }
-    } catch (err) {
-      console.error('Supabase saveInterviewAnswer error, writing to Firestore:', err);
+    } catch (err: any) {
+      console.error('Supabase saveInterviewAnswer exception:', err);
+      if (err.message && err.message.includes('Failed to save interview answer')) {
+        throw err;
+      }
     }
   }
 
   // Firestore Fallback
   const docId = `${userId}_q${answer.question_number}`;
-  await db.collection('interview_answers').doc(docId).set(answerData);
+  await db.collection('interview_answers').doc(docId).set(answerData, { merge: true });
 
-  // Manually update the current_question in the interviews collection (mimicking DB trigger)
   try {
-    const nextQuestion = Math.min(answer.question_number + 1, 4);
+    const nextQuestion = Math.min(answer.question_number + 1, TOTAL_INTERVIEW_QUESTIONS);
     await db.collection('interviews').doc(userId).set({
       current_question: nextQuestion,
       updated_at: now
@@ -280,6 +314,7 @@ export async function saveEvaluationResult(supabase: any, userId: string, interv
   const now = new Date().toISOString();
   const evalData = {
     ...evalResult,
+    interview_id: interviewId,
     created_at: now
   };
 
@@ -312,7 +347,7 @@ export async function saveEvaluationResult(supabase: any, userId: string, interv
 
       if (!aiErr) {
         // Update interview status to 'review_ongoing'
-        await adminSupabase
+        const { error: interviewUpdateErr } = await adminSupabase
           .from('interviews')
           .update({
             status: 'review_ongoing',
@@ -324,12 +359,21 @@ export async function saveEvaluationResult(supabase: any, userId: string, interv
           })
           .eq('id', interviewId);
 
+        if (interviewUpdateErr) {
+          console.error('Failed to update interview status after AI evaluation:', interviewUpdateErr);
+          throw new Error(`Failed to update interview status: ${interviewUpdateErr.message}`);
+        }
+
         return evalResult;
       } else {
         console.error('Supabase saveEvaluationResult error detail:', aiErr);
+        throw new Error(`Failed to save AI evaluation result: ${aiErr.message}`);
       }
-    } catch (err) {
-      console.error('Supabase saveEvaluationResult error, writing to Firestore:', err);
+    } catch (err: any) {
+      console.error('Supabase saveEvaluationResult exception:', err);
+      if (err.message && err.message.includes('Failed to save AI evaluation')) {
+        throw err;
+      }
     }
   }
 
@@ -376,9 +420,11 @@ export async function getEvaluationResult(supabase: any, userId: string, intervi
         .maybeSingle();
       if (!error && data) {
         return data as DbAiResult;
+      } else if (error && error.code !== '42P01') {
+        console.error('Supabase getEvaluationResult error:', error);
       }
     } catch (err) {
-      console.error('Supabase getEvaluationResult error, checking Firestore:', err);
+      console.error('Supabase getEvaluationResult exception:', err);
     }
   }
 
@@ -395,7 +441,7 @@ export async function getEvaluationResult(supabase: any, userId: string, intervi
 }
 
 /**
- * Completes the interview and updates stage status.
+ * Completes the interview and updates applicant stage (stage 6 if accepted).
  */
 export async function completeInterviewWithSimulation(
   supabase: any,
@@ -410,7 +456,7 @@ export async function completeInterviewWithSimulation(
 
   if (await isTableAvailable(adminSupabase, 'interviews')) {
     try {
-      await adminSupabase
+      const { error: interviewErr } = await adminSupabase
         .from('interviews')
         .update({
           status: 'completed',
@@ -419,6 +465,11 @@ export async function completeInterviewWithSimulation(
           updated_at: now
         })
         .eq('id', interviewId);
+
+      if (interviewErr) {
+        console.error('Supabase completeInterview error:', interviewErr);
+        throw new Error(`Failed to complete interview: ${interviewErr.message}`);
+      }
 
       // Transition applicants stage if accepted
       const isAccepted = aiResult.recommendation === 'accepted';
@@ -430,18 +481,24 @@ export async function completeInterviewWithSimulation(
           .maybeSingle();
 
         if (applicant) {
-          await adminSupabase
+          const { error: applicantErr } = await adminSupabase
             .from('applicants')
             .update({
               current_stage: '6',
-              competitive_edge: `Readiness Score: ${aiResult.overall_score}%\nAI Recommendation: ${aiResult.recommendation.toUpperCase()}\nStrengths: ${aiResult.strengths.join(', ')}`
+              competitive_edge: `Readiness Score: ${aiResult.overall_score}%\nAI Recommendation: ${aiResult.recommendation.toUpperCase()}\nStrengths: ${aiResult.strengths.join(', ')}`,
+              updated_at: now
             })
             .eq('id', applicant.id);
+
+          if (applicantErr) {
+            console.error('Failed to update applicant stage 6:', applicantErr);
+          }
         }
       }
       return true;
-    } catch (err) {
-      console.error('Supabase completeInterviewWithSimulation error, updating Firestore:', err);
+    } catch (err: any) {
+      console.error('Supabase completeInterviewWithSimulation exception:', err);
+      throw err;
     }
   }
 
@@ -484,7 +541,7 @@ export async function completeInterviewWithSimulation(
       previous_status: 'review_ongoing',
       new_status: 'completed',
       changed_by: 'system',
-      reason: `Simulated delay completed. Email dispatched: ${emailSent ? 'Success' : 'Failed'}`,
+      reason: `Simulation completed. Email dispatched: ${emailSent ? 'Success' : 'Failed'}`,
       created_at: now
     });
   } catch (hErr) {
@@ -493,3 +550,4 @@ export async function completeInterviewWithSimulation(
 
   return true;
 }
+

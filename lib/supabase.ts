@@ -6,26 +6,37 @@ let browserClient: any = null;
 export const getSupabase = () => {
   if (browserClient) return browserClient;
 
-  let url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ohsqlwpatxjxirlgghrb.supabase.co';
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
-  // Sanitize URL: Remove trailing slash if present
-  if (url.endsWith('/')) {
-    url = url.slice(0, -1);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured');
   }
+  if (!anonKey) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is not configured');
+  }
+
+  const sanitizedUrl = url.replace(/\/$/, '');
   const sanitizedAnonKey = anonKey.trim();
-  browserClient = createBrowserClient(url, sanitizedAnonKey);
+  browserClient = createBrowserClient(sanitizedUrl, sanitizedAnonKey);
   return browserClient;
 };
 
 export const getServerSupabase = (cookieStore: any) => {
-  let url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ohsqlwpatxjxirlgghrb.supabase.co';
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
-  // Sanitize URL: Remove trailing slash if present
-  if (url.endsWith('/')) {
-    url = url.slice(0, -1);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured');
   }
+  if (!anonKey) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is not configured');
+  }
+
+  const sanitizedUrl = url.replace(/\/$/, '');
   const sanitizedAnonKey = anonKey.trim();
-  return createServerClient(url, sanitizedAnonKey, {
+
+  return createServerClient(sanitizedUrl, sanitizedAnonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -42,14 +53,26 @@ export const getServerSupabase = (cookieStore: any) => {
 };
 
 export const getServiceSupabase = () => {
-  let url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ohsqlwpatxjxirlgghrb.supabase.co';
-  let serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-service-key';
-  // Sanitize URL: Remove trailing slash if present
-  if (url.endsWith('/')) {
-    url = url.slice(0, -1);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured');
   }
-  // Sanitize Service Key: Trim whitespace
-  serviceKey = serviceKey.trim();
-  return createClient(url, serviceKey);
+
+  if (!serviceKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
+  }
+
+  const sanitizedUrl = url.replace(/\/$/, '');
+  const sanitizedServiceKey = serviceKey.trim();
+
+  return createClient(sanitizedUrl, sanitizedServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
 };
+
 
