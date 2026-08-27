@@ -53,6 +53,11 @@ export const getServerSupabase = (cookieStore: any) => {
 };
 
 export const getServiceSupabase = () => {
+  console.log(
+    'SUPABASE_SERVICE_ROLE_KEY configured:',
+    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
+  );
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -64,15 +69,16 @@ export const getServiceSupabase = () => {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
   }
 
-  const sanitizedUrl = url.replace(/\/$/, '');
-  const sanitizedServiceKey = serviceKey.trim();
-
-  return createClient(sanitizedUrl, sanitizedServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  return createClient(
+    url.replace(/\/$/, ''),
+    serviceKey.trim(),
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  );
 };
 
 
