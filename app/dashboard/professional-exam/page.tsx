@@ -15,6 +15,7 @@ import {
   Loader2, 
   BookOpen, 
   CheckCircle2, 
+  Sparkles, 
   Maximize2 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -31,6 +32,7 @@ interface Question {
   point: number;
   category: string;
   difficulty: string;
+  quest_num?: number;
   created_at: string;
 }
 
@@ -216,15 +218,16 @@ export default function ProfessionalExamPage() {
       try {
         setLoadingContent(true);
 
-        // Fetch all questions & sort stably
+        // Fetch all questions ordered by quest_num 1 to 75
         const { data: qData, error: qErr } = await supabase
           .from('professional_exam_questions')
-          .select('*');
+          .select('*')
+          .order('quest_num', { ascending: true });
 
         if (qErr) throw qErr;
 
         if (qData) {
-          const sorted = [...qData].sort((a, b) => a.id.localeCompare(b.id));
+          const sorted = [...qData].sort((a, b) => (a.quest_num || 0) - (b.quest_num || 0));
           setQuestions(sorted);
         }
 
@@ -660,7 +663,7 @@ export default function ProfessionalExamPage() {
           {/* LIST OF QUESTIONS (5 per page) */}
           <div className="space-y-6">
             {currentQuestionsBatch.map((q, idx) => {
-              const overallIndex = (currentPage * QUESTIONS_PER_PAGE) + idx + 1;
+              const overallIndex = q.quest_num ?? ((currentPage * QUESTIONS_PER_PAGE) + idx + 1);
               const savedUserChoice = savedAnswers[q.id]?.selected_answer;
               const isSaving = savingAnswerId === q.id;
 
@@ -779,11 +782,12 @@ export default function ProfessionalExamPage() {
                 const pageNumber = Math.floor(idx / QUESTIONS_PER_PAGE);
                 const isAnswered = !!savedAnswers[q.id];
                 const isCurrentPage = pageNumber === currentPage;
+                const displayNum = q.quest_num ?? (idx + 1);
 
                 return (
                   <button
                     key={q.id}
-                    title={`Question ${idx + 1}`}
+                    title={`Question ${displayNum}`}
                     onClick={() => {
                       setCurrentPage(pageNumber);
                       setTimeout(() => {
@@ -801,7 +805,7 @@ export default function ProfessionalExamPage() {
                         : 'bg-white/[0.04] text-gray-500 border border-white/5'
                     }`}
                   >
-                    {idx + 1}
+                    {displayNum}
                   </button>
                 );
               })}
