@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!storagePath) {
-      console.warn(`[CERTIFICATE DOWNLOAD] Certificate record not found for: ${certificateId}`);
+      console.warn(`[CERTIFICATE VIEW] Certificate record not found for: ${certificateId}`);
       return NextResponse.json({ error: 'Certificate record not found' }, { status: 404 });
     }
 
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       .download(storagePath);
 
     if (downloadErr || !fileData) {
-      console.warn(`[CERTIFICATE DOWNLOAD] PDF not found in Storage for path '${storagePath}':`, downloadErr?.message);
+      console.warn(`[CERTIFICATE VIEW] PDF not found in Storage for path '${storagePath}':`, downloadErr?.message);
       return NextResponse.json({ error: 'Certificate file not found' }, { status: 404 });
     }
 
@@ -87,13 +87,13 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `inline; filename="${filename}"`,
         'Cache-Control': 'public, max-age=3600',
       },
     });
 
   } catch (err: any) {
-    console.error('Error downloading certificate:', err);
+    console.error('Error viewing certificate:', err);
     return NextResponse.json({ error: 'Unable to retrieve certificate' }, { status: 500 });
   }
 }

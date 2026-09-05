@@ -569,10 +569,8 @@ export default function ProfessionalExamPage() {
                     studentName={certificate.student_name}
                     courseName={certificate.course_name}
                     awardDate={certificate.award_date}
-                    pdfUrl={certificate.pdf_url}
                   />
                   <CertificateViewer
-                    pdfUrl={certificate.pdf_url}
                     certificateId={certificate.certificate_id}
                     studentName={certificate.student_name}
                     awardDate={certificate.award_date}
