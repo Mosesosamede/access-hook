@@ -21,9 +21,9 @@ export async function generateCertificateId(): Promise<string> {
 
     const currentCount = count || 0;
     
-    // We increment count and pad with 6 zeros
+    // We increment count and pad with 5 zeros
     let sequentialNum = currentCount + 1;
-    let certId = `DELX-${yearStr}-${String(sequentialNum).padStart(6, '0')}`;
+    let certId = `DELX-${yearStr}-${String(sequentialNum).padStart(5, '0')}`;
 
     // Double check if this certId already exists in database (safety check)
     let isUnique = false;
@@ -39,7 +39,7 @@ export async function generateCertificateId(): Promise<string> {
         isUnique = true;
       } else {
         sequentialNum++;
-        certId = `DELX-${yearStr}-${String(sequentialNum).padStart(6, '0')}`;
+        certId = `DELX-${yearStr}-${String(sequentialNum).padStart(5, '0')}`;
         attempts++;
       }
     }
@@ -47,8 +47,8 @@ export async function generateCertificateId(): Promise<string> {
     return certId;
   } catch (err) {
     console.error('Failed to generate Certificate ID:', err);
-    // Fallback: use current timestamp if db call fails
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    return `DELX-${yearStr}-F${Date.now().toString().slice(-4)}${randomSuffix}`;
+    // Fallback: use random suffix with 5 digits if db call fails
+    const randomSuffix = String(Math.floor(1000 + Math.random() * 9000)).padStart(5, '0');
+    return `DELX-${yearStr}-${randomSuffix}`;
   }
 }

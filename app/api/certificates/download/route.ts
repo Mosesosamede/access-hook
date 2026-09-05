@@ -13,59 +13,42 @@ export async function GET(req: NextRequest) {
     }
 
     const supabase = getServiceSupabase();
+    const bucketName = 'allcertification';
 
-    // Query the certificates table
+    // 1. Find the certificate in the certificates table
     const { data: cert, error } = await supabase
       .from('certificates')
       .select('*')
       .or(`certificate_id.eq.${certificateId},id.eq.${certificateId},applicant_id.eq.${certificateId}`)
       .maybeSingle();
 
-    if (error) {
-      console.error('Error finding certificate in database:', error);
+    if (error || !cert) {
+      console.warn(`[CERTIFICATE] Record not found for ID: ${certificateId}`);
+      return NextResponse.json({ error: 'Certificate record not found' }, { status: 404 });
     }
 
-    if (!cert) {
-      return NextResponse.json({ error: `Certificate record '${certificateId}' not found in database.` }, { status: 404 });
+    // 2. Read its storage_path
+    const storagePath = cert.storage_path;
+    if (!storagePath) {
+      console.warn(`[CERTIFICATE] Storage path missing for certificate: ${certificateId}`);
+      return NextResponse.json({ error: 'Certificate PDF not found in Storage' }, { status: 404 });
     }
 
-    const bucketName = 'allcertification';
-    let pdfBuffer: ArrayBuffer | null = null;
+    // 3. Download that exact file from the allcertification bucket
+    const { data: fileData, error: downloadErr } = await supabase.storage
+      .from(bucketName)
+      .download(storagePath);
 
-    // 1. Primary retrieval: Download directly from allcertification storage bucket using real storage_path
-    if (cert.storage_path) {
-      const { data: fileData, error: downloadErr } = await supabase.storage
-        .from(bucketName)
-        .download(cert.storage_path);
-
-      if (!downloadErr && fileData) {
-        pdfBuffer = await fileData.arrayBuffer();
-      } else if (downloadErr) {
-        console.warn(`Storage download error for path '${cert.storage_path}':`, downloadErr.message);
-      }
+    if (downloadErr || !fileData) {
+      console.warn(`[CERTIFICATE] Storage download failed for path '${storagePath}':`, downloadErr?.message);
+      return NextResponse.json({ error: 'Certificate PDF not found in Storage' }, { status: 404 });
     }
 
-    // 2. Secondary fallback: Fetch via pdf_url if storage_path was not downloadable
-    if (!pdfBuffer && cert.pdf_url && cert.pdf_url.startsWith('http')) {
-      try {
-        const response = await fetch(cert.pdf_url);
-        if (response.ok) {
-          pdfBuffer = await response.arrayBuffer();
-        }
-      } catch (fetchErr) {
-        console.warn('Failed to fetch certificate via pdf_url:', fetchErr);
-      }
-    }
+    const pdfBuffer = await fileData.arrayBuffer();
 
-    if (!pdfBuffer) {
-      return NextResponse.json({ 
-        error: `Certificate PDF file for '${certificateId}' was not found in storage bucket '${bucketName}'.` 
-      }, { status: 404 });
-    }
-
-    // Return the PDF with proper content headers
+    // 4. Return the PDF with proper Content-Type and Content-Disposition
     const viewInline = searchParams.get('view') === 'true';
-    const filename = `${cert.certificate_id || 'certificate'}.pdf`;
+    const filename = `${cert.certificate_id || certificateId}.pdf`;
     const contentDisposition = viewInline 
       ? `inline; filename="${filename}"`
       : `attachment; filename="${filename}"`;
@@ -78,6 +61,7 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'public, max-age=3600',
       },
     });
+
   } catch (err: any) {
     console.error('Error downloading certificate:', err);
     return NextResponse.json({ error: 'Failed to download certificate' }, { status: 500 });
