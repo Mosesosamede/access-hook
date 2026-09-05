@@ -65,10 +65,15 @@ export async function POST(req: NextRequest) {
     const certificateId = await generateCertificateId();
     const qrVerificationUrl = `https://ecosystem.deloxehr.com/verify/${certificateId}`;
     const awardDate = new Date();
+    const studentName = applicant.full_name || 'Student Name';
+
+    console.log('[Certificate] Applicant:', applicantId, studentName);
+    console.log('[Certificate] Eligibility:', isEligible);
+    console.log('[Certificate] Certificate ID:', certificateId);
+    console.log('[Certificate] Template:', 'allcertification/templates/Deloxe Profesional Certificate.png');
+    console.log('[Certificate] Storage bucket:', 'allcertification');
 
     // 5. Render the PDF Certificate using template overlay layout
-    const studentName = applicant.full_name || 'Student Name';
-    console.log('Generating PDF for:', studentName, certificateId);
     let pdfBuffer: Buffer;
     try {
       pdfBuffer = await generateCertificate({
@@ -76,6 +81,8 @@ export async function POST(req: NextRequest) {
         certificateId,
         awardDate,
       });
+      console.log('[Certificate] PDF generated:', true);
+      console.log('[Certificate] PDF size:', pdfBuffer.length);
     } catch (genErr: any) {
       console.error('Error generating PDF buffer:', genErr);
       return NextResponse.json({
@@ -91,6 +98,8 @@ export async function POST(req: NextRequest) {
       const uploadRes = await uploadCertificate(pdfBuffer, certificateId);
       publicUrl = uploadRes.publicUrl;
       storagePath = uploadRes.storagePath;
+      console.log('[Certificate] Storage path:', storagePath);
+      console.log('[Certificate] Upload successful:', true);
     } catch (upErr: any) {
       console.error('Error uploading or verifying certificate in storage:', upErr);
       return NextResponse.json({
@@ -103,7 +112,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 7. Insert record into `certificates` table ONLY AFTER successful upload & verification
-    console.log('[CERTIFICATE] Database record created');
     const certRecord = {
       applicant_id: applicantId,
       certificate_id: certificateId,
@@ -130,6 +138,8 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
+    console.log('[Certificate] Database record created:', true);
+
     // 8. Update applicants table to store readiness_certificate_id and readiness_certificate_url
     await supabase
       .from('applicants')
@@ -138,6 +148,8 @@ export async function POST(req: NextRequest) {
         readiness_certificate_url: publicUrl,
       })
       .eq('id', applicantId);
+
+    console.log('[Certificate] Applicant updated:', true);
 
     return NextResponse.json({
       success: true,
