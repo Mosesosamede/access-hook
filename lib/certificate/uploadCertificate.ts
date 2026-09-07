@@ -17,13 +17,22 @@ export async function uploadCertificate(
   const currentYear = new Date().getFullYear();
   const storagePath = `certificates/${currentYear}/${certificateId}.pdf`;
 
-  console.log(`[CERTIFICATE] ID: ${certificateId}`);
-  console.log(`[CERTIFICATE] Bucket: ${bucketName}`);
-  console.log(`[CERTIFICATE] Storage path: ${storagePath}`);
-
   try {
-    // 1. Upload the file to allcertification storage bucket
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    // 1. Ensure the bucket exists (try to create if it doesn't, ignoring errors)
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const hasBucket = buckets?.some(b => b.name === bucketName);
+    
+    if (!hasBucket) {
+      console.log(`Bucket ${bucketName} not found, attempting to create it...`);
+      await supabase.storage.createBucket(bucketName, {
+        public: true,
+        fileSizeLimit: 10485760, // 10MB
+        allowedMimeTypes: ['application/pdf', 'image/png']
+      });
+    }
+
+    // 2. Upload the file
+    const { error: uploadError } = await supabase.storage
       .from(bucketName)
       .upload(storagePath, fileBuffer, {
         contentType: 'application/pdf',
@@ -31,23 +40,8 @@ export async function uploadCertificate(
       });
 
     if (uploadError) {
-      console.error(`[CERTIFICATE] Upload error for ${certificateId}:`, uploadError);
-      throw new Error(`Failed to upload certificate PDF to storage bucket '${bucketName}': ${uploadError.message}`);
+      throw uploadError;
     }
-
-    console.log('[CERTIFICATE] Upload successful');
-
-    // 2. Verify that the uploaded file actually exists in Storage
-    const { data: verifyData, error: verifyError } = await supabase.storage
-      .from(bucketName)
-      .download(storagePath);
-
-    if (verifyError || !verifyData) {
-      console.error(`[CERTIFICATE] Storage verification failed for ${storagePath}:`, verifyError);
-      throw new Error(`Storage verification failed for path '${storagePath}': ${verifyError?.message || 'File not found'}`);
-    }
-
-    console.log('[CERTIFICATE] Storage verification successful');
 
     // 3. Get the public URL
     const { data: { publicUrl } } = supabase.storage
@@ -56,10 +50,10 @@ export async function uploadCertificate(
 
     return {
       publicUrl,
-      storagePath: uploadData?.path || storagePath,
+      storagePath,
     };
   } catch (err: any) {
-    console.error('Failed to upload and verify certificate in Supabase Storage:', err);
-    throw err;
+    console.error('Failed to upload certificate to Supabase Storage:', err);
+    throw new Error(`Upload failed: ${err.message || err}`);
   }
 }
