@@ -7,6 +7,7 @@ interface CertificateCardProps {
   studentName: string;
   courseName: string;
   awardDate: string;
+  pdfUrl: string;
 }
 
 export function CertificateCard({
@@ -14,6 +15,7 @@ export function CertificateCard({
   studentName,
   courseName,
   awardDate,
+  pdfUrl,
 }: CertificateCardProps) {
   const formattedDate = new Date(awardDate).toLocaleDateString(undefined, {
     year: 'numeric',
@@ -67,7 +69,7 @@ export function CertificateCard({
         <div className="flex flex-col sm:flex-row md:flex-col gap-3 min-w-[200px] justify-end">
           {/* View certificate opens in a new tab */}
           <a
-            href={`/api/certificates/view?id=${certificateId}`}
+            href={`/api/certificates/download?id=${certificateId}&view=true`}
             target="_blank"
             rel="noopener noreferrer"
             className="px-5 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 border border-white/10 transition-all active:scale-[0.98]"
