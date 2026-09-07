@@ -3,6 +3,7 @@ import { Eye, Loader2, Download, ExternalLink, ShieldCheck, QrCode, FileText } f
 import { motion } from 'motion/react';
 
 interface CertificateViewerProps {
+  pdfUrl: string;
   certificateId: string;
   studentName?: string;
   awardDate?: string;
@@ -10,6 +11,7 @@ interface CertificateViewerProps {
 }
 
 export function CertificateViewer({ 
+  pdfUrl, 
   certificateId,
   studentName = "Valued Scholar",
   awardDate,
@@ -56,7 +58,7 @@ export function CertificateViewer({
         )}
 
         <iframe
-          src={`/api/certificates/view?id=${certificateId}#toolbar=0&navpanes=0`}
+          src={`/api/certificates/download?id=${certificateId}&view=true#toolbar=0&navpanes=0`}
           className="w-full h-full border-0"
           onLoad={() => setLoading(false)}
           title={`Certificate Preview: ${certificateId}`}
@@ -137,7 +139,7 @@ export function CertificateViewer({
         <p className="text-[11px] text-center sm:text-left">Use the actions below to open or download the high-resolution certificate PDF.</p>
         <div className="flex items-center gap-3">
           <a
-            href={`/api/certificates/view?id=${certificateId}`}
+            href={`/api/certificates/download?id=${certificateId}&view=true`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 text-gray-300 hover:text-[#dbf0de] transition-colors"
