@@ -27,7 +27,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Applicant not found' }, { status: 404 });
     }
 
-    // 2. Verify actual exam submission & eligibility (NO fake auto-creation)
+    // 2. Verify 100% training completion (5 modules logged)
+    const { count: logsCount, error: logsErr } = await supabase
+      .from('training_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('applicant_id', applicantId);
+
+    if (logsErr) {
+      console.error('Error fetching training logs:', logsErr);
+    }
+
+    const logsCompleted = logsCount || 0;
+    const trainingCompleted = logsCompleted >= 5 || (applicant.progress_percent && applicant.progress_percent >= 100);
+
+    if (!trainingCompleted) {
+      return NextResponse.json({
+        error: `Incomplete training: Student has only completed ${logsCompleted}/5 training modules. All 5 modules must be logged.`
+      }, { status: 400 });
+    }
+
+    // 3. Verify final assessment has been submitted
     const { data: examSubmission, error: examErr } = await supabase
       .from('professional_exam_submissions')
       .select('*')
@@ -38,16 +57,14 @@ export async function POST(req: NextRequest) {
       console.error('Error fetching exam submission:', examErr);
     }
 
-    const isEligible = examSubmission && (examSubmission.passed === true || examSubmission.certificate_eligible === true);
-
-    if (!isEligible) {
+    if (!examSubmission) {
       return NextResponse.json({
-        error: 'Assessment not submitted: Student has not passed the Professional Certification Exam yet.'
+        error: 'Assessment not submitted: Student has not submitted the final Professional Certification Exam yet.'
       }, { status: 400 });
     }
 
-    // 3. Idempotency Check: Return existing certificate if it already exists
-    const { data: existingCert } = await supabase
+    // 4. Idempotency Check: Return existing certificate if it already exists
+    const { data: existingCert, error: certErr } = await supabase
       .from('certificates')
       .select('*')
       .eq('applicant_id', applicantId)
@@ -61,19 +78,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 4. Generate new unique Certificate ID and QR Code url
+    // 5. Generate new unique Certificate ID and QR Code url
     const certificateId = await generateCertificateId();
     const qrVerificationUrl = `https://ecosystem.deloxehr.com/verify/${certificateId}`;
     const awardDate = new Date();
+
+    // 6. Render the PDF Certificate using template overlay layout
     const studentName = applicant.full_name || 'Student Name';
-
-    console.log('[Certificate] Applicant:', applicantId, studentName);
-    console.log('[Certificate] Eligibility:', isEligible);
-    console.log('[Certificate] Certificate ID:', certificateId);
-    console.log('[Certificate] Template:', 'allcertification/templates/Deloxe Profesional Certificate.png');
-    console.log('[Certificate] Storage bucket:', 'allcertification');
-
-    // 5. Render the PDF Certificate using template overlay layout
+    console.log('Generating PDF for:', studentName, certificateId);
     let pdfBuffer: Buffer;
     try {
       pdfBuffer = await generateCertificate({
@@ -81,37 +93,26 @@ export async function POST(req: NextRequest) {
         certificateId,
         awardDate,
       });
-      console.log('[Certificate] PDF generated:', true);
-      console.log('[Certificate] PDF size:', pdfBuffer.length);
     } catch (genErr: any) {
       console.error('Error generating PDF buffer:', genErr);
-      return NextResponse.json({
-        error: 'PDF Generation failed',
-        details: genErr.message || String(genErr)
-      }, { status: 500 });
+      throw new Error(`PDF Generation failed: ${genErr.message || genErr}`);
     }
 
-    // 6. Upload PDF certificate to storage bucket & verify storage existence
+    // 7. Upload PDF certificate to storage bucket
+    console.log('Uploading PDF to storage:', certificateId);
     let publicUrl: string;
     let storagePath: string;
     try {
       const uploadRes = await uploadCertificate(pdfBuffer, certificateId);
       publicUrl = uploadRes.publicUrl;
       storagePath = uploadRes.storagePath;
-      console.log('[Certificate] Storage path:', storagePath);
-      console.log('[Certificate] Upload successful:', true);
     } catch (upErr: any) {
-      console.error('Error uploading or verifying certificate in storage:', upErr);
-      return NextResponse.json({
-        error: 'Upload to storage failed or verification failed',
-        certificateId,
-        bucket: 'allcertification',
-        storagePath: `certificates/${new Date().getFullYear()}/${certificateId}.pdf`,
-        details: upErr.message || String(upErr)
-      }, { status: 500 });
+      console.error('Error uploading certificate:', upErr);
+      throw new Error(`Upload to storage failed: ${upErr.message || upErr}`);
     }
 
-    // 7. Insert record into `certificates` table ONLY AFTER successful upload & verification
+    // 8. Insert record into `certificates` table
+    console.log('Saving certificate record to DB:', certificateId);
     const certRecord = {
       applicant_id: applicantId,
       certificate_id: certificateId,
@@ -119,7 +120,7 @@ export async function POST(req: NextRequest) {
       course_name: certificateConfig.courseNameDefault,
       award_date: awardDate.toISOString().split('T')[0], // YYYY-MM-DD
       issued_at: awardDate.toISOString(),
-      verification_status: 'verified',
+      verification_status: 'verified', // status: verified, revoked, inactive
       pdf_url: publicUrl,
       storage_path: storagePath,
       qr_verification_url: qrVerificationUrl,
@@ -129,19 +130,19 @@ export async function POST(req: NextRequest) {
       .from('certificates')
       .insert(certRecord)
       .select('*')
-      .maybeSingle();
+      .single();
 
     if (insertCertErr) {
-      console.error('Error saving certificate record to DB:', insertCertErr);
-      return NextResponse.json({
-        error: `Failed to save certificate to database: ${insertCertErr.message}`
+      console.error('Error saving certificate to DB:', insertCertErr);
+      return NextResponse.json({ 
+        error: 'Database error saving certificate', 
+        details: insertCertErr.message,
+        code: insertCertErr.code
       }, { status: 500 });
     }
 
-    console.log('[Certificate] Database record created:', true);
-
-    // 8. Update applicants table to store readiness_certificate_id and readiness_certificate_url
-    await supabase
+    // 9. Update applicants table to store readiness_certificate_id and readiness_certificate_url
+    const { error: updateAppErr } = await supabase
       .from('applicants')
       .update({
         readiness_certificate_id: certificateId,
@@ -149,7 +150,10 @@ export async function POST(req: NextRequest) {
       })
       .eq('id', applicantId);
 
-    console.log('[Certificate] Applicant updated:', true);
+    if (updateAppErr) {
+      console.error('Error updating applicant with certificate info:', updateAppErr);
+      // We don't fail the request since the certificate was successfully generated and stored in certificates table
+    }
 
     return NextResponse.json({
       success: true,
