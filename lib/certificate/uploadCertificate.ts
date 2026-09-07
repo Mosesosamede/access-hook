@@ -18,25 +18,21 @@ export async function uploadCertificate(
   const storagePath = `certificates/${currentYear}/${certificateId}.pdf`;
 
   try {
-    // 1. Ensure the bucket exists
-    try {
-      const { data: buckets } = await supabase.storage.listBuckets();
-      const hasBucket = buckets?.some(b => b.name === bucketName);
-      
-      if (!hasBucket) {
-        console.log(`Bucket ${bucketName} not found, attempting to create it...`);
-        await supabase.storage.createBucket(bucketName, {
-          public: true,
-          fileSizeLimit: 10485760, // 10MB
-          allowedMimeTypes: ['application/pdf', 'image/png']
-        });
-      }
-    } catch (bucketErr) {
-      console.warn('Bucket check/creation notice:', bucketErr);
+    // 1. Ensure the bucket exists (try to create if it doesn't, ignoring errors)
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const hasBucket = buckets?.some(b => b.name === bucketName);
+    
+    if (!hasBucket) {
+      console.log(`Bucket ${bucketName} not found, attempting to create it...`);
+      await supabase.storage.createBucket(bucketName, {
+        public: true,
+        fileSizeLimit: 10485760, // 10MB
+        allowedMimeTypes: ['application/pdf', 'image/png']
+      });
     }
 
-    // 2. Upload the file to allcertification storage bucket
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    // 2. Upload the file
+    const { error: uploadError } = await supabase.storage
       .from(bucketName)
       .upload(storagePath, fileBuffer, {
         contentType: 'application/pdf',
@@ -44,8 +40,7 @@ export async function uploadCertificate(
       });
 
     if (uploadError) {
-      console.error('Storage upload error to allcertification bucket:', uploadError);
-      throw new Error(`Failed to upload certificate PDF to storage bucket '${bucketName}': ${uploadError.message}`);
+      throw uploadError;
     }
 
     // 3. Get the public URL
@@ -55,10 +50,10 @@ export async function uploadCertificate(
 
     return {
       publicUrl,
-      storagePath: uploadData?.path || storagePath,
+      storagePath,
     };
   } catch (err: any) {
     console.error('Failed to upload certificate to Supabase Storage:', err);
-    throw err;
+    throw new Error(`Upload failed: ${err.message || err}`);
   }
 }
