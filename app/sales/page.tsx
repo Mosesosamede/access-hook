@@ -21,7 +21,7 @@ export default function SalesHubPage() {
       <div className="relative z-10 bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 flex flex-col md:flex-row-reverse gap-8 md:gap-12 p-6 md:p-12 items-center max-w-5xl mx-auto shadow-2xl">
         <div className="flex-1 w-full text-center md:text-left">
           <h1 className="text-3xl md:text-5xl font-bold mb-4 text-white">Get Hired Handbook</h1>
-          <p className="text-base md:text-xl mb-8">Your ultimate guide to securing your dream internship. Purchase now to receive your unique Access Code and start your 4-year internship track.</p>
+          <p className="text-base md:text-xl mb-8">Your ultimate guide to securing your dream internship. Purchase now to receive your unique Access Code and start your internship track.</p>
           <BuyBook />
         </div>
         <div className="flex-none order-first md:order-last">
